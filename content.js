@@ -59,10 +59,27 @@
       '[id*="subject" i] input'
     ],
     bodyEditable: [
-      'div[aria-label="Body" i][contenteditable="true"]',
+      // Explicitly labelled editors (most reliable).
+      '[aria-label="Body" i][contenteditable="true"]',
+      '[aria-label*="email body" i][contenteditable="true"]',
+      '[aria-label*="message" i][contenteditable="true"]',
       'div[contenteditable="true"][role="textbox"]',
+      '[role="textbox"][contenteditable="true"]',
+      // CKEditor-style surfaces.
       'div.cke_editable[contenteditable="true"]',
-      'div[contenteditable="true"]'
+      '.cke_editable.cke_editable_themed',
+      // Zoho's in-house editor (class names are unstable — kept as fallbacks only).
+      '.zeditor[contenteditable="true"]',
+      '[class*="ze_body" i][contenteditable="true"]',
+      '[class*="editor" i][contenteditable="true"][role="textbox"]',
+      // Iframe-based editors: the editable node is the frame's own <body>.
+      'body[contenteditable="true"]',
+      'body[contenteditable=""]',
+      'body[contenteditable]',
+      // Generic fallbacks — any tag, including contenteditable="" (which means "true").
+      'div[contenteditable="true"]',
+      'div[contenteditable=""]',
+      '[contenteditable="plaintext-only"]'
     ],
     sendButton: [
       'button[aria-label="Send" i]',
@@ -87,7 +104,9 @@
   // Small DOM / async utilities
   // ---------------------------------------------------------------------
   function isVisible(el) {
-    if (!el || !(el instanceof Element)) return false;
+    // nodeType check (realm-safe) instead of `instanceof Element`: elements
+    // inside same-origin iframes belong to another realm in some embeddings.
+    if (!el || el.nodeType !== 1) return false;
     const rect = el.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return false;
     const style = window.getComputedStyle(el);
@@ -153,12 +172,20 @@
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
 
-  /** Collects same-origin iframe documents accessible from the current page (Zoho sometimes nests the editor). */
-  function accessibleDocuments() {
-    const docs = [document];
-    document.querySelectorAll("iframe").forEach((frame) => {
+  /**
+   * Collects same-origin iframe documents under a root (Element or Document),
+   * recursively — Zoho sometimes nests the editor one or more frames deep.
+   */
+  function iframeDocsIn(root, depth = 0) {
+    const docs = [];
+    if (depth > 3 || !root || !root.querySelectorAll) return docs;
+    root.querySelectorAll("iframe").forEach((frame) => {
       try {
-        if (frame.contentDocument) docs.push(frame.contentDocument);
+        const doc = frame.contentDocument;
+        if (doc) {
+          docs.push(doc);
+          docs.push(...iframeDocsIn(doc, depth + 1));
+        }
       } catch (e) {
         /* cross-origin, skip */
       }
@@ -166,8 +193,26 @@
     return docs;
   }
 
+  /** Collects this page's document plus every same-origin iframe document reachable from it. */
+  function accessibleDocuments() {
+    return [document, ...iframeDocsIn(document)];
+  }
+
+  /**
+   * Roots to search when a compose scope is known: the scope element itself
+   * (top-document part of the compose UI) PLUS the documents of any same-origin
+   * iframes mounted inside it. This matters because Zoho renders the email body
+   * editor inside an iframe within the compose panel, and querySelectorAll can
+   * never cross frame boundaries — without this the body editor is invisible to
+   * a scoped lookup even though it is visually part of the compose window.
+   */
+  function scopedSearchRoots(scope) {
+    if (!scope) return accessibleDocuments();
+    return [scope, ...iframeDocsIn(scope)];
+  }
+
   function queryFirstAcrossDocs(selectors, scope) {
-    const roots = scope ? [scope] : accessibleDocuments();
+    const roots = scopedSearchRoots(scope);
     for (const root of roots) {
       const found = queryFirst(selectors, root);
       if (found) return found;
@@ -176,7 +221,7 @@
   }
 
   function findByTextAcrossDocs(regex, scope) {
-    const roots = scope ? [scope] : accessibleDocuments();
+    const roots = scopedSearchRoots(scope);
     for (const root of roots) {
       const found = findByText(regex, root);
       if (found) return found;
@@ -193,9 +238,12 @@
   function getComposeScope(anchorEl) {
     if (!anchorEl) return null;
     let node = anchorEl;
-    for (let i = 0; i < 8 && node; i++) {
-      if (node.matches && (node.matches('[role="dialog"]') || /compose/i.test(node.className || ""))) {
-        return node;
+    for (let i = 0; i < 14 && node; i++) {
+      if (node.matches) {
+        const cls = typeof node.className === "string" ? node.className : "";
+        if (node.matches('[role="dialog"]') || /compose/i.test(cls)) {
+          return node;
+        }
       }
       node = node.parentElement;
     }
@@ -589,10 +637,89 @@
     await simulateTyping(subjectInput, subject, { minDelay: 10, maxDelay: 30 });
   }
 
-  async function fillBody(html, keepSignature, scope) {
-    const body = await waitFor(() => queryFirstAcrossDocs(SELECTORS.bodyEditable, scope), { timeout: 6000 });
-    if (!body) throw new Error("Could not find the email body editor in the Zoho compose window.");
+  /**
+   * True for compose header controls (To/Cc/Bcc/Subject). Some Zoho layouts
+   * render these as contenteditable divs, so the generic "any contenteditable"
+   * fallbacks must never mistake them for the body editor.
+   */
+  function looksLikeComposeField(el) {
+    // nodeType check (realm-safe) — see isVisible(). Non-elements can never be
+    // the body editor, so they are treated as compose-field-like (rejected).
+    if (!el || el.nodeType !== 1) return true;
+    if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") return true;
+    const hints = [
+      el.getAttribute("aria-label") || "",
+      el.getAttribute("placeholder") || "",
+      el.getAttribute("data-cke-field") || "",
+      el.getAttribute("name") || ""
+    ].join(" ");
+    return /\b(to|cc|bcc|subject|recipient|attendee)\b/i.test(hints);
+  }
 
+  /**
+   * Locates the email body editor for the current compose window.
+   *
+   * Strategy (in order):
+   *  1. Known selectors, searched inside the compose scope AND inside every
+   *     same-origin iframe mounted within it (Zoho renders the editor surface
+   *     in a nested iframe — querySelectorAll alone can never reach it).
+   *  2. Iframe editors whose editable node is the frame's <body>: matches
+   *     contenteditable bodies, plus designMode="on" documents (older Zoho
+   *     editor style, which sets no contenteditable attribute at all).
+   * Anything that looks like a To/Cc/Bcc/Subject control is rejected.
+   */
+  function findBodyEditor(scope) {
+    const roots = scopedSearchRoots(scope);
+
+    // Pass 1: selector-based lookup.
+    for (const root of roots) {
+      for (const sel of SELECTORS.bodyEditable) {
+        try {
+          const nodes = root.querySelectorAll(sel);
+          for (const node of nodes) {
+            if (isVisible(node) && !looksLikeComposeField(node)) return node;
+          }
+        } catch (e) {
+          /* invalid selector in this Chrome version, skip */
+        }
+      }
+    }
+
+    // Pass 2: iframe-body editors (contenteditable <body>, or designMode frames).
+    for (const doc of roots) {
+      if (!doc || doc.nodeType !== 9) continue;
+      try {
+        const frameBody = doc.body;
+        if (frameBody && frameBody !== document.body && !looksLikeComposeField(frameBody)) {
+          if (frameBody.isContentEditable || doc.designMode === "on") return frameBody;
+        }
+      } catch (e) {
+        /* skip */
+      }
+    }
+
+    return null;
+  }
+
+  async function fillBody(html, keepSignature, scope) {
+    // The editor iframe mounts asynchronously — give it a generous window.
+    const body = await waitFor(() => findBodyEditor(scope), { timeout: 15000, interval: 250 });
+    if (!body) {
+      throw new Error(
+        "Could not find the email body editor in the Zoho compose window. " +
+          "Try switching Zoho Mail's compose editor to 'Plain text' and back (Settings > Compose), or click into the email body once, then restart the campaign."
+      );
+    }
+
+    // For iframe-based editors, focus the frame's window before the element.
+    const ownerDoc = body.ownerDocument;
+    if (ownerDoc && ownerDoc !== document && ownerDoc.defaultView) {
+      try {
+        ownerDoc.defaultView.focus();
+      } catch (e) {
+        /* ignore */
+      }
+    }
     body.focus();
 
     if (!keepSignature) {
@@ -859,4 +986,17 @@
 
   // Build the (hidden) HUD shell early so the launcher button is ready once a campaign starts.
   buildHUD();
+
+  // Test seam: exposes internals for the automated DOM tests in test/.
+  // Opt-in only (never set on real pages), so this is inert in production.
+  if (window.__AOZ_EXPOSE_FOR_TESTS__) {
+    window.__aozTestHelpers = {
+      SELECTORS,
+      findBodyEditor,
+      queryFirstAcrossDocs,
+      getComposeScope,
+      iframeDocsIn,
+      accessibleDocuments
+    };
+  }
 })();

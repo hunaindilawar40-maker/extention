@@ -212,6 +212,13 @@ icons/                16x16, 48x48, 128x128 extension icons
   extension still can't find the To/Subject/Body fields, see `content.js` — the
   `SELECTORS` object at the top lists every lookup strategy and is designed to be
   easy to extend with a new selector if Zoho changes its markup.
+- **"Could not find the email body editor"** — Zoho renders the compose body editor
+  inside a nested iframe (and in some versions the editable node is the iframe's own
+  `<body>`, or a `designMode` frame with no `contenteditable` attribute at all). The
+  extension searches the compose window *and* every same-origin iframe inside it
+  (`findBodyEditor` in `content.js`). If it still fails: click once inside the email
+  body area so Zoho mounts the editor, then retry the campaign; also make sure the
+  compose window isn't collapsed to a header-only draft bubble.
 - **Groq errors (401/429)** — 401 means the API key is wrong; re-copy it from
   [console.groq.com/keys](https://console.groq.com/keys). 429 means you're
   rate-limited — wait a minute, or switch to a smaller/faster model.
