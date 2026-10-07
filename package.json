@@ -1,0 +1,8 @@
+{
+  "name": "ai-outreach-zoho-extension",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
