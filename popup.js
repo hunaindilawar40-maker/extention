@@ -61,16 +61,57 @@ function initTabs() {
 // ---------------------------------------------------------------------
 // Settings & Compose tabs
 // ---------------------------------------------------------------------
-async function populateModelSelect(selected) {
+function populateModelSelect(selected, models = GROQ_MODELS) {
   const sel = $("#modelSelect");
   sel.innerHTML = "";
-  for (const m of GROQ_MODELS) {
+  for (const m of models) {
     const opt = document.createElement("option");
     opt.value = m.id;
-    opt.textContent = m.label;
+    opt.textContent = m.label || m.id;
     sel.appendChild(opt);
   }
-  sel.value = selected;
+
+  const availableIds = models.map((model) => model.id);
+  const preferred = [selected, "llama-3.1-8b-instant", "llama-3.3-70b-versatile"];
+  sel.value = preferred.find((id) => availableIds.includes(id)) || availableIds[0] || "";
+}
+
+function modelLabel(model) {
+  const known = GROQ_MODELS.find((item) => item.id === model.id);
+  const context = model.contextWindow ? ` · ${(model.contextWindow / 1000).toFixed(0)}k context` : "";
+  return known ? `${known.label}${context}` : `${model.id}${context}`;
+}
+
+async function refreshGroqModels() {
+  const apiKey = $("#groqApiKey").value.trim();
+  const status = $("#modelStatus");
+  const button = $("#btnRefreshModels");
+  if (!apiKey) {
+    status.textContent = "Enter your Groq API key first.";
+    return false;
+  }
+
+  const selected = $("#modelSelect").value;
+  button.disabled = true;
+  status.textContent = "Loading models from Groq…";
+  const res = await sendBg({ type: "LIST_GROQ_MODELS", apiKey });
+  button.disabled = false;
+
+  if (!res.ok) {
+    status.textContent = `Could not load models: ${res.error}`;
+    return false;
+  }
+  if (!res.models?.length) {
+    status.textContent = "Groq returned no compatible chat models for this key.";
+    return false;
+  }
+
+  populateModelSelect(
+    selected,
+    res.models.map((model) => ({ ...model, label: modelLabel(model) }))
+  );
+  status.textContent = `${res.models.length} live chat model${res.models.length === 1 ? "" : "s"} available for this key. The list comes directly from Groq.`;
+  return true;
 }
 
 async function loadSettingsIntoForm() {
@@ -109,17 +150,39 @@ function initSettingsEvents() {
     $("#btnToggleKey").textContent = show ? "Hide" : "Show";
   });
 
+  $("#btnRefreshModels").addEventListener("click", refreshGroqModels);
+
+  $("#groqApiKey").addEventListener("change", () => {
+    if ($("#groqApiKey").value.trim()) refreshGroqModels();
+  });
+
   $("#btnTestKey").addEventListener("click", async () => {
     const apiKey = $("#groqApiKey").value.trim();
-    const model = $("#modelSelect").value;
     const resultEl = $("#testKeyResult");
     if (!apiKey) {
       resultEl.textContent = "Enter an API key first.";
       return;
     }
-    resultEl.textContent = "Testing…";
-    const res = await sendBg({ type: "TEST_API_KEY", apiKey, model });
-    resultEl.textContent = res.ok ? "✅ Key works!" : `❌ ${res.error}`;
+
+    const preferredModel = $("#modelSelect").value;
+    resultEl.textContent = "Finding a model your Groq key can use…";
+    const res = await sendBg({
+      type: "FIND_WORKING_GROQ_MODEL",
+      apiKey,
+      model: preferredModel
+    });
+    if (!res.ok) {
+      resultEl.textContent = `❌ ${res.error}`;
+      return;
+    }
+
+    populateModelSelect(
+      res.model,
+      res.models.map((model) => ({ ...model, label: modelLabel(model) }))
+    );
+    $("#modelStatus").textContent = `${res.models.length} live chat model${res.models.length === 1 ? "" : "s"} found. ${res.model} was verified with a real completion.`;
+    await saveSettings({ groqApiKey: apiKey, model: res.model });
+    resultEl.textContent = `✅ Verified and saved: ${res.model}`;
   });
 
   $("#btnResetPrompt").addEventListener("click", () => {
@@ -587,7 +650,8 @@ async function init() {
   initLogsEvents();
   initStorageSync();
 
-  await loadSettingsIntoForm();
+  const settings = await loadSettingsIntoForm();
+  if (settings.groqApiKey) await refreshGroqModels();
   await renderLeadsTable();
   await renderDashboard();
   await renderLogsTable();

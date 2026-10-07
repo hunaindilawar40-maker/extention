@@ -7,7 +7,13 @@
  *  - Acts as a thin message router between the popup and the content script
  *    running inside the Zoho Mail tab (finding the right tab, relaying commands).
  */
-import { generateColdEmail, bodyToHtml, testGroqKey } from "./lib/groq.js";
+import {
+  generateColdEmail,
+  bodyToHtml,
+  testGroqKey,
+  listGroqModels,
+  findWorkingGroqModel
+} from "./lib/groq.js";
 import {
   getSettings,
   saveSettings,
@@ -83,10 +89,28 @@ async function handleMessage(message, sender) {
       }
     }
 
+    case "LIST_GROQ_MODELS": {
+      try {
+        const models = await listGroqModels(message.apiKey);
+        return { ok: true, models };
+      } catch (err) {
+        return { ok: false, error: err?.message || String(err) };
+      }
+    }
+
     case "TEST_API_KEY": {
       try {
         await testGroqKey(message.apiKey, message.model);
         return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err?.message || String(err) };
+      }
+    }
+
+    case "FIND_WORKING_GROQ_MODEL": {
+      try {
+        const result = await findWorkingGroqModel(message.apiKey, message.model);
+        return { ok: true, ...result };
       } catch (err) {
         return { ok: false, error: err?.message || String(err) };
       }

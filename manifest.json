@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI Outreach for Zoho Mail",
   "short_name": "AI Outreach",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "AI-personalized cold outreach automation for Zoho Mail. Import Apollo.io CSV leads, generate human-sounding emails with Groq AI, and send directly inside mail.zoho.com with built-in anti-spam safeguards.",
   "icons": {
     "16": "icons/icon16.png",
