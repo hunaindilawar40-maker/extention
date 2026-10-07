@@ -179,9 +179,13 @@
             <input type="password" id="groqApiKey" placeholder="gsk_..." />
             <button class="btn btn-tiny btn-secondary" id="btnToggleKey">Show</button>
           </div>
-          <label class="field-label">Model</label>
+          <div class="field-label-row">
+            <label class="field-label" for="modelSelect">Model</label>
+            <button class="text-btn" id="btnRefreshModels" type="button">Refresh available models</button>
+          </div>
           <select id="modelSelect"></select>
-          <button class="btn btn-secondary btn-block" id="btnTestKey">Test API Key</button>
+          <div id="modelStatus" class="hint">Enter your key, then refresh to load models available on your Groq account.</div>
+          <button class="btn btn-secondary btn-block" id="btnTestKey">Find &amp; Test a Working Model</button>
           <div id="testKeyResult" class="hint"></div>
           <div class="hint">
             Get a free Groq API key at

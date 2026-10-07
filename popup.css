@@ -325,6 +325,38 @@ textarea:focus {
   margin-top: 4px;
 }
 
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.field-label-row .field-label {
+  margin-bottom: 4px;
+}
+
+.text-btn {
+  border: 0;
+  padding: 2px 0;
+  background: transparent;
+  color: #9cc2ff;
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.text-btn:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.text-btn:disabled {
+  color: var(--text-dim);
+  cursor: wait;
+  text-decoration: none;
+}
+
 .field-label-inline {
   font-size: 10.5px;
   color: var(--text-dim);

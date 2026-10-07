@@ -16,8 +16,8 @@ and leads exported from **Apollo.io**.
    `First Name`, `Email`, `Title`, `Company Name`, `Industry`, `Company Description`,
    `City/State/Country`, `Website`, `LinkedIn URL` are auto-detected. A column-mapping
    screen lets you fix anything that wasn't recognized.
-2. **Generate** a short, natural, non-templated email per lead with Groq
-   (`llama-3.3-70b-versatile` by default), referencing real details from the lead's
+2. **Generate** a short, natural, non-templated email per lead with a live model
+   available to your Groq account (`llama-3.1-8b-instant` fallback), referencing real details from the lead's
    row so every email feels individually written — never two identical openings,
    even for leads in the same industry.
 3. **Inject directly into Zoho Mail** — the extension opens "New Mail" in your real
@@ -50,10 +50,12 @@ and leads exported from **Apollo.io**.
 
 1. Go to [console.groq.com/keys](https://console.groq.com/keys) and sign up (free).
 2. Click **Create API Key**, name it anything, and copy the key (starts with `gsk_`).
-3. In the extension popup, open the **Settings** tab, paste the key into **Groq API
-   key**, choose a model (default: `llama-3.3-70b-versatile` — great balance of
-   quality and speed; `llama-3.1-8b-instant` is fastest if you're on a stricter rate
-   limit), and click **Test API Key** to confirm it works.
+3. In the extension popup, open the **Settings** tab and paste the key into **Groq API
+   key**. Click **Refresh available models** (the extension also refreshes them
+   automatically), then click **Find & Test a Working Model**. The extension tries a
+   tiny completion and automatically saves the first model your key can really use.
+   The dropdown is loaded from Groq's live Models API, so deprecated or unavailable
+   models are not trusted from a hard-coded list.
 
 Groq's free tier is generous for this use case (a few dozen short completions a day is
 nowhere near typical limits), but if you ever see `429` errors in the Settings tab,
