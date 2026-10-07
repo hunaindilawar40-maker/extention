@@ -39,8 +39,17 @@
       '[aria-label="To" i] textarea',
       'textarea[placeholder="To" i]',
       'input[placeholder="To" i]',
+      'input[placeholder*="recipient" i]',
+      'input[placeholder*="email" i]',
+      'input[name="to" i]',
+      'input[name="toaddr" i]',
+      '[role="combobox"][aria-label*="to" i]',
+      '[role="combobox"][aria-label*="recipient" i]',
+      '[contenteditable="true"][aria-label*="to" i]',
+      '[contenteditable="true"][aria-label*="recipient" i]',
       '[data-cke-field="to"] input',
-      '[id*="toaddr" i]'
+      '[id*="toaddr" i]',
+      '[id*="recipient" i] input'
     ],
     subjectInput: [
       'input[aria-label="Subject" i]',
@@ -203,8 +212,12 @@
   ).set;
 
   function setNativeValue(el, value) {
-    const setter = el.tagName === "TEXTAREA" ? nativeTextareaValueSetter : nativeInputValueSetter;
-    setter.call(el, value);
+    if (el.isContentEditable || el.getAttribute("contenteditable") === "true") {
+      el.textContent = value;
+    } else {
+      const setter = el.tagName === "TEXTAREA" ? nativeTextareaValueSetter : nativeInputValueSetter;
+      setter.call(el, value);
+    }
     el.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
@@ -515,10 +528,19 @@
   // Zoho Mail DOM automation
   // ---------------------------------------------------------------------
   async function openCompose() {
-    // If a compose panel with a To field is already open, reuse it.
+    // Reuse an already-open compose, including Zoho's newer layout where the
+    // recipient control is mounted only after the compose shell appears.
     let toInput = queryFirstAcrossDocs(SELECTORS.toInput);
     if (toInput) return;
+    const composeAlreadyOpen = queryFirstAcrossDocs(SELECTORS.composePanel) ||
+      queryFirstAcrossDocs(SELECTORS.subjectInput) ||
+      queryFirstAcrossDocs(SELECTORS.bodyEditable);
+    if (composeAlreadyOpen) {
+      toInput = await waitFor(() => queryFirstAcrossDocs(SELECTORS.toInput), { timeout: 60000 });
+      if (toInput) return;
+    }
 
+    // No compose is open, so open a fresh one automatically for this lead.
     let btn = queryFirstAcrossDocs(SELECTORS.composeButton) || findByTextAcrossDocs(TEXT_HINTS.compose);
     if (btn) {
       btn.click();
@@ -546,12 +568,13 @@
     // Force pill/token creation.
     dispatchKey(toInput, "Enter", 13);
     await sleep(200);
-    if ((toInput.value || "").trim().length > 0) {
+    const recipientValue = () => (toInput.value || toInput.textContent || "").trim();
+    if (recipientValue().length > 0) {
       // Some Zoho layouts use comma instead of Enter to tokenize.
       dispatchKey(toInput, ",", 188);
       await sleep(200);
     }
-    if ((toInput.value || "").trim().length > 0) {
+    if (recipientValue().length > 0) {
       toInput.blur();
       await sleep(200);
     }
