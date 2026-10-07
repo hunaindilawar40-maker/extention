@@ -5,7 +5,7 @@ human-sounding cold emails, written by a free Groq-hosted LLM, and sends them st
 from your own **Zoho Mail** inbox (`mail.zoho.com`) — with built-in pacing and daily
 limits so your free Zoho account stays healthy.
 
-Built for: `info@navainai.com` on **Zoho Mail Free**, using the **Groq API** (free tier)
+Built for: `support@navainai.com` on **Zoho Mail Free**, using the **Groq API** (free tier)
 and leads exported from **Apollo.io**.
 
 ---
