@@ -17,7 +17,7 @@ and leads exported from **Apollo.io**.
    `City/State/Country`, `Website`, `LinkedIn URL` are auto-detected. A column-mapping
    screen lets you fix anything that wasn't recognized.
 2. **Generate** a short, natural, non-templated email per lead with a live model
-   available to your Groq account (`llama-3.1-8b-instant` fallback), referencing real details from the lead's
+   available to your Groq account (`openai/gpt-oss-20b` fallback), referencing real details from the lead's
    row so every email feels individually written — never two identical openings,
    even for leads in the same industry.
 3. **Inject directly into Zoho Mail** — the extension opens "New Mail" in your real

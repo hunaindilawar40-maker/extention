@@ -72,7 +72,13 @@ function populateModelSelect(selected, models = GROQ_MODELS) {
   }
 
   const availableIds = models.map((model) => model.id);
-  const preferred = [selected, "llama-3.1-8b-instant", "llama-3.3-70b-versatile"];
+  const preferred = [
+    selected,
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+    "llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile"
+  ];
   sel.value = preferred.find((id) => availableIds.includes(id)) || availableIds[0] || "";
 }
 
@@ -110,6 +116,13 @@ async function refreshGroqModels() {
     selected,
     res.models.map((model) => ({ ...model, label: modelLabel(model) }))
   );
+  const resolvedModel = $("#modelSelect").value;
+  if (resolvedModel && resolvedModel !== selected) {
+    // Keep storage in sync when a previously saved model is no longer
+    // available. Otherwise the dropdown looks fixed while campaigns keep
+    // sending the stale model ID from storage.
+    await saveSettings({ model: resolvedModel });
+  }
   status.textContent = `${res.models.length} live chat model${res.models.length === 1 ? "" : "s"} available for this key. The list comes directly from Groq.`;
   return true;
 }
