@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>AI Outreach for Zoho Mail</title>
+<link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header">
+      <img src="icons/icon48.png" alt="" class="app-logo" />
+      <div class="app-heading">
+        <div class="app-title">AI Outreach</div>
+        <div class="app-subtitle">for Zoho Mail</div>
+      </div>
+      <span id="connStatus" class="conn-badge conn-unknown" title="Zoho Mail tab connection">●</span>
+    </header>
+
+    <nav class="tabs" id="tabs">
+      <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="leads">Leads</button>
+      <button class="tab-btn" data-tab="compose">Compose</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
+      <button class="tab-btn" data-tab="logs">Logs</button>
+    </nav>
+
+    <main class="tab-content">
+      <!-- DASHBOARD -->
+      <section id="tab-dashboard" class="tab-pane active">
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-value" id="statTotal">0</div>
+            <div class="stat-label">Leads loaded</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statSent">0</div>
+            <div class="stat-label">Sent</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statPending">0</div>
+            <div class="stat-label">Pending</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="statFailed">0</div>
+            <div class="stat-label">Failed</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Today's quota</div>
+          <div class="quota-bar-track">
+            <div class="quota-bar-fill" id="quotaBarFill"></div>
+          </div>
+          <div class="quota-text" id="quotaText">0 / 60 sent today</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Zoho Mail tab</div>
+          <div class="hint" id="zohoTabHint">Checking for an open mail.zoho.com tab…</div>
+          <button class="btn btn-secondary btn-block" id="btnFindTab">Re-check connection</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Send mode</div>
+          <div class="radio-row">
+            <label class="radio-pill">
+              <input type="radio" name="sendModeQuick" value="review" />
+              <span>Review (1-click send)</span>
+            </label>
+            <label class="radio-pill">
+              <input type="radio" name="sendModeQuick" value="auto" />
+              <span>Full-Auto</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="campaign-controls">
+          <button class="btn btn-primary btn-block" id="btnStart">▶ Start Campaign</button>
+          <div class="btn-row">
+            <button class="btn btn-secondary" id="btnPause">⏸ Pause</button>
+            <button class="btn btn-secondary" id="btnResume">▶ Resume</button>
+            <button class="btn btn-secondary" id="btnSkipDelay">⏭ Skip Delay</button>
+          </div>
+          <button class="btn btn-danger btn-block" id="btnStop">■ Stop Campaign</button>
+        </div>
+        <p class="footnote">The live HUD inside Zoho Mail shows per-lead progress, the countdown timer, and review controls.</p>
+      </section>
+
+      <!-- LEADS -->
+      <section id="tab-leads" class="tab-pane">
+        <div id="dropZone" class="dropzone">
+          <div class="dropzone-icon">📄</div>
+          <div class="dropzone-text"><strong>Drag & drop</strong> your Apollo.io CSV export here</div>
+          <div class="dropzone-sub">or</div>
+          <button class="btn btn-secondary" id="btnBrowseCsv">Browse file</button>
+          <input type="file" id="csvFileInput" accept=".csv" hidden />
+        </div>
+
+        <div class="leads-toolbar">
+          <input type="search" id="leadSearch" placeholder="Search name, email, company…" />
+          <select id="leadFilter">
+            <option value="all">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="generating">Generating</option>
+            <option value="injected">Injected</option>
+            <option value="sent">Sent</option>
+            <option value="failed">Failed</option>
+            <option value="skipped">Skipped</option>
+          </select>
+          <button class="btn btn-tiny btn-secondary" id="btnClearLeads" title="Remove all leads">Clear</button>
+        </div>
+
+        <div class="table-wrap">
+          <table class="leads-table" id="leadsTable">
+            <thead>
+              <tr>
+                <th>Lead</th>
+                <th>Company</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="leadsTbody">
+              <tr class="empty-row"><td colspan="4">No leads yet — import a CSV above.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- COMPOSE / AI SETTINGS -->
+      <section id="tab-compose" class="tab-pane">
+        <div class="card">
+          <div class="card-title">Sender context</div>
+          <label class="field-label">Your name (used in AI prompt)</label>
+          <input type="text" id="senderName" placeholder="e.g. Hunain" />
+          <label class="field-label">Your company</label>
+          <input type="text" id="senderCompany" placeholder="e.g. Navain AI" />
+          <label class="field-label">What you're offering</label>
+          <textarea id="offer" rows="2" placeholder="e.g. a done-for-you AI chatbot that books appointments for local service businesses"></textarea>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Style controls</div>
+          <label class="field-label">Max words per email body: <span id="maxWordsVal">110</span></label>
+          <input type="range" id="maxWords" min="60" max="160" step="5" />
+          <label class="field-label">Creativity / temperature: <span id="temperatureVal">0.80</span></label>
+          <input type="range" id="temperature" min="0.6" max="0.95" step="0.05" />
+          <label class="checkbox-row">
+            <input type="checkbox" id="keepSignature" checked />
+            <span>Preserve my Zoho default signature (recommended)</span>
+          </label>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Banned robotic phrases</div>
+          <div class="hint">One per line. The AI will never use these — and will auto-rewrite if it slips up.</div>
+          <textarea id="bannedPhrases" rows="5"></textarea>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Prompt template</div>
+          <div class="hint">
+            Placeholders: {{firstName}} {{fullName}} {{title}} {{company}} {{industry}} {{description}}
+            {{location}} {{website}} {{senderName}} {{senderCompany}} {{offer}} {{maxWords}} {{bannedPhrases}}
+          </div>
+          <textarea id="promptTemplate" rows="10"></textarea>
+          <button class="btn btn-tiny btn-secondary" id="btnResetPrompt">Reset to default</button>
+        </div>
+
+        <button class="btn btn-primary btn-block" id="btnSaveCompose">Save Compose Settings</button>
+      </section>
+
+      <!-- SETTINGS -->
+      <section id="tab-settings" class="tab-pane">
+        <div class="card">
+          <div class="card-title">Groq API</div>
+          <label class="field-label">Groq API key</label>
+          <div class="input-with-btn">
+            <input type="password" id="groqApiKey" placeholder="gsk_..." />
+            <button class="btn btn-tiny btn-secondary" id="btnToggleKey">Show</button>
+          </div>
+          <label class="field-label">Model</label>
+          <select id="modelSelect"></select>
+          <button class="btn btn-secondary btn-block" id="btnTestKey">Test API Key</button>
+          <div id="testKeyResult" class="hint"></div>
+          <div class="hint">
+            Get a free Groq API key at
+            <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Sending behavior</div>
+          <div class="radio-row">
+            <label class="radio-pill">
+              <input type="radio" name="sendMode" value="review" />
+              <span>Review mode (1-click confirm)</span>
+            </label>
+            <label class="radio-pill">
+              <input type="radio" name="sendMode" value="auto" />
+              <span>Full-Auto send</span>
+            </label>
+          </div>
+
+          <label class="field-label">Delay between sends (seconds)</label>
+          <div class="range-pair">
+            <div>
+              <span class="field-label-inline">Min</span>
+              <input type="number" id="delayMin" min="5" max="600" />
+            </div>
+            <div>
+              <span class="field-label-inline">Max</span>
+              <input type="number" id="delayMax" min="5" max="900" />
+            </div>
+          </div>
+
+          <label class="field-label">Daily sending quota (free Zoho tier safety cap)</label>
+          <input type="number" id="dailyQuota" min="1" max="300" />
+        </div>
+
+        <button class="btn btn-primary btn-block" id="btnSaveSettings">Save Settings</button>
+        <div id="saveSettingsResult" class="hint"></div>
+      </section>
+
+      <!-- LOGS -->
+      <section id="tab-logs" class="tab-pane">
+        <div class="leads-toolbar">
+          <input type="search" id="logSearch" placeholder="Search logs…" />
+          <button class="btn btn-tiny btn-secondary" id="btnExportLogs">Export CSV</button>
+          <button class="btn btn-tiny btn-danger" id="btnClearLogs">Clear</button>
+        </div>
+        <div class="table-wrap">
+          <table class="leads-table" id="logsTable">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Recipient</th>
+                <th>Subject</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="logsTbody">
+              <tr class="empty-row"><td colspan="4">No activity yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Column mapping modal -->
+  <div id="mapModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-title">Map CSV columns</div>
+      <div class="hint">We auto-detected as many Apollo.io columns as we could. Fix any that look wrong, then import.</div>
+      <div id="mapFields" class="map-fields"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btnMapCancel">Cancel</button>
+        <button class="btn btn-primary" id="btnMapConfirm">Import Leads</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lead preview modal -->
+  <div id="previewModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-title">Email preview</div>
+      <div id="previewContent" class="preview-content"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" id="btnPreviewClose">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastHost" class="toast-host"></div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
