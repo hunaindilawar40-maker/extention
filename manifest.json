@@ -1,0 +1,66 @@
+{
+  "manifest_version": 3,
+  "name": "AI Outreach for Zoho Mail",
+  "short_name": "AI Outreach",
+  "version": "1.0.0",
+  "description": "AI-personalized cold outreach automation for Zoho Mail. Import Apollo.io CSV leads, generate human-sounding emails with Groq AI, and send directly inside mail.zoho.com with built-in anti-spam safeguards.",
+  "default_locale": "en",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "AI Outreach for Zoho Mail"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://api.groq.com/*",
+    "https://mail.zoho.com/*",
+    "https://mail.zoho.eu/*",
+    "https://mail.zoho.in/*",
+    "https://mail.zoho.com.au/*",
+    "https://mail.zoho.com.cn/*",
+    "https://mail.zoho.jp/*",
+    "https://mail.zohocloud.ca/*",
+    "https://mail.zoho.uk/*",
+    "https://mail.zoho.sa/*",
+    "https://mail.zoho.ca/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://mail.zoho.com/*",
+        "https://mail.zoho.eu/*",
+        "https://mail.zoho.in/*",
+        "https://mail.zoho.com.au/*",
+        "https://mail.zoho.com.cn/*",
+        "https://mail.zoho.jp/*",
+        "https://mail.zohocloud.ca/*",
+        "https://mail.zoho.uk/*",
+        "https://mail.zoho.sa/*",
+        "https://mail.zoho.ca/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "minimum_chrome_version": "110"
+}
