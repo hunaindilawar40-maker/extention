@@ -561,6 +561,30 @@
     }
   }
 
+  async function leadStillEligible(lead) {
+    const { aoz_leads: leads = [] } = await storageGet(["aoz_leads"]);
+    const current = leads.find((l) => l.id === lead.id);
+    return !!current && (!lead.followUpNumber ||
+      (current.sentAt && lead.followUpNumber === (current.followUps || []).length + 1 && lead.followUpNumber <= 3));
+  }
+
+  async function updateCampaignLead(lead, patch) {
+    if (!lead.followUpNumber) return updateLeadInStorage(lead.id, patch);
+    const { aoz_leads: leads = [] } = await storageGet(["aoz_leads"]);
+    const current = leads.find((l) => l.id === lead.id);
+    if (!current) return;
+    if (patch.subject) lead.followUpSubject = patch.subject;
+    if (patch.body) lead.followUpBody = patch.body;
+    if (patch.status === "sent") {
+      await updateLeadInStorage(lead.id, { followUps: [...(current.followUps || []), {
+        number: lead.followUpNumber, subject: lead.followUpSubject,
+        body: lead.followUpBody, sentAt: patch.sentAt
+      }], followUpError: null });
+    } else if (patch.error) {
+      await updateLeadInStorage(lead.id, { followUpError: patch.error });
+    }
+  }
+
   async function appendLogEntry(entry) {
     const { aoz_logs: logs = [] } = await storageGet(["aoz_logs"]);
     logs.unshift(entry);
@@ -817,11 +841,12 @@
       state.index = i;
       const lead = leads[i];
       if (state.stopped) break;
-      if (lead.status === "sent") continue;
+      if (lead.status === "sent" && !lead.followUpNumber) continue;
 
       await waitWhilePaused();
       if (state.stopped) break;
 
+      if (!(await leadStillEligible(lead))) continue;
       setLeadCard(lead);
 
       const quotaRes = await sendBg({ type: "GET_QUOTA" });
@@ -832,41 +857,46 @@
       }
 
       setStep("Generating AI draft…", "loading");
-      await updateLeadInStorage(lead.id, { status: "generating" });
+      await updateCampaignLead(lead, { status: "generating" });
       const gen = await sendBg({ type: "GENERATE_EMAIL", lead });
 
       if (!gen.ok) {
-        await updateLeadInStorage(lead.id, { status: "failed", error: gen.error });
+        await updateCampaignLead(lead, { status: "failed", error: gen.error });
         await appendLogEntry(logRow(lead, "", "failed", gen.error));
         setStep(`AI generation failed: ${gen.error}`, "error");
         await sleep(1500);
         continue;
       }
 
+      if (state.stopped || !(await leadStillEligible(lead))) continue;
       setStep("Opening compose & injecting email…", "loading");
       try {
         await openComposeAndFill(lead, gen.subject, gen.bodyHtml, settings.keepSignature);
       } catch (err) {
-        await updateLeadInStorage(lead.id, { status: "failed", error: err.message, subject: gen.subject, body: gen.bodyText });
+        await updateCampaignLead(lead, { status: "failed", error: err.message, subject: gen.subject, body: gen.bodyText });
         await appendLogEntry(logRow(lead, gen.subject, "failed", err.message));
         setStep(err.message, "error");
         await sleep(2000);
         continue;
       }
 
-      await updateLeadInStorage(lead.id, { status: "injected", subject: gen.subject, body: gen.bodyText });
+      await updateCampaignLead(lead, { status: "injected", subject: gen.subject, body: gen.bodyText });
 
       if (settings.sendMode === "auto") {
         setStep("Sending…", "loading");
         try {
-          await clickSendButton(activeComposeScope);
-          await updateLeadInStorage(lead.id, { status: "sent", sentAt: Date.now() });
+          if (state.stopped || !(await leadStillEligible(lead))) {
+              closeComposeIfOpen(activeComposeScope);
+              continue;
+            }
+            await clickSendButton(activeComposeScope);
+          await updateCampaignLead(lead, { status: "sent", sentAt: Date.now() });
           await sendBg({ type: "INCREMENT_QUOTA" });
           await appendLogEntry(logRow(lead, gen.subject, "sent", ""));
           setStep("Sent!", "success");
           await refreshQuotaPill();
         } catch (err) {
-          await updateLeadInStorage(lead.id, { status: "failed", error: err.message });
+          await updateCampaignLead(lead, { status: "failed", error: err.message });
           await appendLogEntry(logRow(lead, gen.subject, "failed", err.message));
           setStep(err.message, "error");
         }
@@ -879,19 +909,23 @@
         } else if (decision === "send") {
           setStep("Sending…", "loading");
           try {
+            if (state.stopped || !(await leadStillEligible(lead))) {
+              closeComposeIfOpen(activeComposeScope);
+              continue;
+            }
             await clickSendButton(activeComposeScope);
-            await updateLeadInStorage(lead.id, { status: "sent", sentAt: Date.now() });
+            await updateCampaignLead(lead, { status: "sent", sentAt: Date.now() });
             await sendBg({ type: "INCREMENT_QUOTA" });
             await appendLogEntry(logRow(lead, gen.subject, "sent", ""));
             setStep("Sent!", "success");
             await refreshQuotaPill();
           } catch (err) {
-            await updateLeadInStorage(lead.id, { status: "failed", error: err.message });
+            await updateCampaignLead(lead, { status: "failed", error: err.message });
             await appendLogEntry(logRow(lead, gen.subject, "failed", err.message));
             setStep(err.message, "error");
           }
         } else {
-          await updateLeadInStorage(lead.id, { status: "skipped" });
+          await updateCampaignLead(lead, { status: "skipped" });
           await appendLogEntry(logRow(lead, gen.subject, "skipped", "Skipped by user during review"));
           closeComposeIfOpen(activeComposeScope);
           setStep("Lead skipped.", "error");
@@ -917,6 +951,7 @@
       name: lead.fullName,
       company: lead.company,
       subject: subject || "",
+      followUpNumber: lead.followUpNumber || 0,
       status,
       error: error || ""
     };
@@ -991,6 +1026,8 @@
   // Opt-in only (never set on real pages), so this is inert in production.
   if (window.__AOZ_EXPOSE_FOR_TESTS__) {
     window.__aozTestHelpers = {
+      leadStillEligible,
+      updateCampaignLead,
       SELECTORS,
       findBodyEditor,
       queryFirstAcrossDocs,

@@ -15,6 +15,7 @@ import {
   findWorkingGroqModel
 } from "./lib/groq.js";
 import {
+  getLeads,
   getSettings,
   saveSettings,
   getQuota,
@@ -81,7 +82,19 @@ async function handleMessage(message, sender) {
     case "GENERATE_EMAIL": {
       try {
         const settings = await getSettings();
-        const result = await generateColdEmail(message.lead, settings);
+        const lead = (await getLeads()).find((l) => l.id === message.lead?.id);
+        if (!lead) throw new Error("This lead was removed from the queue.");
+        if (message.lead.followUpNumber) {
+          const number = message.lead.followUpNumber;
+          if (!lead.sentAt || number !== (lead.followUps || []).length + 1 || number > 3) {
+            throw new Error("This follow-up is no longer eligible.");
+          }
+          settings.promptTemplate += `
+
+IMPORTANT: Instead of a first-touch email, write follow-up ${number} of 3 to the previous outreach below. Add a fresh relevant angle, avoid repeating the previous emails, and use a polite final close for follow-up 3. Never claim the recipient replied. Return the same JSON shape.
+Previous emails (context only): ${JSON.stringify([{ subject: lead.subject, body: lead.body }, ...(lead.followUps || [])])}`;
+        }
+        const result = await generateColdEmail(lead, settings);
         const html = bodyToHtml(result.body);
         return { ok: true, subject: result.subject, bodyText: result.body, bodyHtml: html };
       } catch (err) {

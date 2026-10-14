@@ -433,9 +433,10 @@ function applyLeadsFilter() {
         <div class="lead-email">${escapeHtml(lead.email)}</div>
       </td>
       <td>${escapeHtml(lead.company || "—")}</td>
-      <td>${statusBadge(lead.status)}</td>
+      <td>${statusBadge(lead.status)}${lead.sentAt ? `<div class="hint">Follow-ups: ${(lead.followUps || []).length}/3</div>` : ""}</td>
       <td>
         <div class="row-actions">
+          ${lead.sentAt && (lead.followUps || []).length < 3 ? `<button class="icon-btn" data-action="followup" data-id="${lead.id}" title="Draft next follow-up (review before sending)">↻</button>` : ""}
           <button class="icon-btn" data-action="preview" data-id="${lead.id}" title="Preview email">👁</button>
           <button class="icon-btn" data-action="remove" data-id="${lead.id}" title="Remove lead">✕</button>
         </div>
@@ -453,10 +454,24 @@ function initLeadsTableEvents() {
     if (!btn) return;
     const id = btn.dataset.id;
     if (btn.dataset.action === "remove") {
+      if (!confirm("Remove this person and cancel any remaining emails? An email already sent cannot be recalled.")) return;
       const leads = await getLeads();
       await saveLeads(leads.filter((l) => l.id !== id));
       await renderLeadsTable();
       await renderDashboard();
+    } else if (btn.dataset.action === "followup") {
+      const lead = (await getLeads()).find((l) => l.id === id);
+      if (!lead?.sentAt || (lead.followUps || []).length >= 3) return;
+      if (!confirm("Draft the next follow-up? Confirm this person has not replied or opted out. You must approve the email in Zoho before it sends.")) return;
+      const settings = await getSettings();
+      if (!settings.groqApiKey) return toast("Add your Groq API key in Settings first.", "error");
+      const conn = await checkZohoConnection();
+      if (!conn.ok) return toast(conn.error, "error");
+      const res = await sendBg({ type: "RELAY_TO_ZOHO_TAB", payload: {
+        type: "START_CAMPAIGN", leads: [{ ...lead, followUpNumber: (lead.followUps || []).length + 1 }],
+        settings: { ...settings, sendMode: "review" }
+      } });
+      toast(res.ok && res.response?.ok ? "Follow-up started — review it in Zoho Mail." : res.response?.error || res.error, res.ok && res.response?.ok ? "success" : "error");
     } else if (btn.dataset.action === "preview") {
       const lead = leadsCache.find((l) => l.id === id);
       if (!lead) return;
@@ -537,7 +552,7 @@ function initDashboardEvents() {
       return;
     }
     const leads = await getLeads();
-    const toSend = leads.filter((l) => l.status !== "sent");
+    const toSend = leads.filter((l) => !l.sentAt && l.status !== "sent");
     if (!toSend.length) {
       toast("No pending leads to send. Import a CSV in the Leads tab.", "error");
       return;
