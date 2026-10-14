@@ -86,7 +86,7 @@ async function handleMessage(message, sender) {
         if (!lead) throw new Error("This lead was removed from the queue.");
         if (message.lead.followUpNumber) {
           const number = message.lead.followUpNumber;
-          if (!lead.sentAt || number !== (lead.followUps || []).length + 1 || number > 3) {
+          if (lead.followUpsStopped || !Number.isInteger(number) || !lead.sentAt || number !== (lead.followUps || []).length + 1 || number > 3) {
             throw new Error("This follow-up is no longer eligible.");
           }
           settings.promptTemplate += `

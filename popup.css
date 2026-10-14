@@ -535,6 +535,7 @@ input[type="range"] {
 
 .row-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
 }
 
@@ -677,3 +678,18 @@ input[type="range"] {
   background: rgba(255, 255, 255, 0.15);
   border-radius: 4px;
 }
+
+/* Separate the initial email from each follow-up in the history preview. */
+.email-history-entry + .email-history-entry { border-top: 1px solid var(--border, #ddd); margin-top: 16px; padding-top: 12px; }
+.email-history-entry h4 { margin: 0 0 6px; }
+
+/* Action rows stay visible without horizontal scrolling, even for long leads. */
+#leadsTable { table-layout: fixed; }
+#leadsTable td { overflow-wrap: anywhere; }
+#leadsTable th:nth-child(1) { width: 34%; }
+#leadsTable th:nth-child(2) { width: 22%; }
+#leadsTable th:nth-child(3) { width: 24%; }
+#leadsTable th:nth-child(4) { width: 20%; }
+#leadsTable .lead-actions-row td { border-top: 0; padding-top: 0; }
+#leadsTable .lead-actions-row .hint { margin-top: 5px; }
+.row-actions .btn:disabled { opacity: 0.5; cursor: not-allowed; }

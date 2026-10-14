@@ -565,7 +565,7 @@
     const { aoz_leads: leads = [] } = await storageGet(["aoz_leads"]);
     const current = leads.find((l) => l.id === lead.id);
     return !!current && (!lead.followUpNumber ||
-      (current.sentAt && lead.followUpNumber === (current.followUps || []).length + 1 && lead.followUpNumber <= 3));
+      (!current.followUpsStopped && Number.isInteger(lead.followUpNumber) && current.sentAt && lead.followUpNumber === (current.followUps || []).length + 1 && lead.followUpNumber <= 3));
   }
 
   async function updateCampaignLead(lead, patch) {
@@ -882,7 +882,13 @@
 
       await updateCampaignLead(lead, { status: "injected", subject: gen.subject, body: gen.bodyText });
 
-      if (settings.sendMode === "auto") {
+      if (state.stopped || !(await leadStillEligible(lead))) {
+        closeComposeIfOpen(activeComposeScope);
+        continue;
+      }
+
+      // Follow-ups always require explicit approval, even if auto mode was requested.
+      if (settings.sendMode === "auto" && !lead.followUpNumber) {
         setStep("Sending…", "loading");
         try {
           if (state.stopped || !(await leadStillEligible(lead))) {
@@ -924,7 +930,7 @@
             await appendLogEntry(logRow(lead, gen.subject, "failed", err.message));
             setStep(err.message, "error");
           }
-        } else {
+        } else if (decision !== "cancel") {
           await updateCampaignLead(lead, { status: "skipped" });
           await appendLogEntry(logRow(lead, gen.subject, "skipped", "Skipped by user during review"));
           closeComposeIfOpen(activeComposeScope);
@@ -956,6 +962,22 @@
       error: error || ""
     };
   }
+
+  function handleLeadsChanged(changes, area) {
+    if (area !== "local" || !changes.aoz_leads || !state.running) return;
+    const lead = state.leads[state.index];
+    const current = (changes.aoz_leads.newValue || []).find((item) => item.id === lead?.id);
+    if (current && (!lead.followUpNumber || !current.followUpsStopped)) return;
+    if (state.reviewResolve) {
+      state.reviewResolve("cancel");
+      state.reviewResolve = null;
+      setReviewVisible(false);
+      closeComposeIfOpen(activeComposeScope);
+      setStep("Email cancelled: person removed or follow-ups stopped.");
+    }
+  }
+
+  chrome.storage.onChanged?.addListener(handleLeadsChanged);
 
   // ---------------------------------------------------------------------
   // Message listener (popup -> content script)
@@ -1026,6 +1048,8 @@
   // Opt-in only (never set on real pages), so this is inert in production.
   if (window.__AOZ_EXPOSE_FOR_TESTS__) {
     window.__aozTestHelpers = {
+      handleLeadsChanged,
+      state,
       leadStillEligible,
       updateCampaignLead,
       SELECTORS,
