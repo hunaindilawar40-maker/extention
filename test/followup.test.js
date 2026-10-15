@@ -43,3 +43,41 @@ test('follow-ups retain original email and advance only after sending', async ()
     assert.equal(await helpers.leadStillEligible({ ...lead, followUpNumber: 2 }), true);
   } finally { dom.window.close(); }
 });
+
+test('stopped follow-ups cannot send, but history is preserved', async () => {
+  const lead = { id: 'a', sentAt: 1, followUpsStopped: true, followUps: [{ number: 1, body: 'Previous' }] };
+  const { dom, data, helpers } = setup([lead]);
+  try {
+    assert.equal(await helpers.leadStillEligible({ ...lead, followUpNumber: 2 }), false);
+    assert.equal(data.aoz_leads[0].followUps[0].body, 'Previous');
+  } finally { dom.window.close(); }
+});
+
+test('failed or skipped follow-ups do not consume a follow-up slot', async () => {
+  const lead = { id: 'a', sentAt: 1, followUpNumber: 1 };
+  const { dom, data, helpers } = setup([{ id: 'a', sentAt: 1 }]);
+  try {
+    await helpers.updateCampaignLead(lead, { status: 'failed', error: 'Network error' });
+    await helpers.updateCampaignLead(lead, { status: 'skipped' });
+    assert.equal(data.aoz_leads[0].followUps, undefined);
+    assert.equal(data.aoz_leads[0].followUpError, 'Network error');
+    assert.equal(await helpers.leadStillEligible(lead), true);
+  } finally { dom.window.close(); }
+});
+
+for (const action of ['remove', 'stop']) {
+  test(`${action} immediately cancels a follow-up awaiting review`, () => {
+    const lead = { id: 'a', sentAt: 1, followUpNumber: 1 };
+    const { dom, helpers } = setup([lead]);
+    try {
+      let decision;
+      helpers.state.running = true;
+      helpers.state.leads = [lead];
+      helpers.state.index = 0;
+      helpers.state.reviewResolve = (value) => { decision = value; };
+      helpers.handleLeadsChanged({ aoz_leads: { newValue: action === 'remove' ? [] : [{ ...lead, followUpsStopped: true }] } }, 'local');
+      assert.equal(decision, 'cancel');
+      assert.equal(helpers.state.reviewResolve, null);
+    } finally { dom.window.close(); }
+  });
+}

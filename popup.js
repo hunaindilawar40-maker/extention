@@ -4,6 +4,7 @@ import {
   saveSettings,
   getLeads,
   saveLeads,
+  updateLead,
   getLogs,
   clearLogs,
   getQuota
@@ -433,15 +434,26 @@ function applyLeadsFilter() {
         <div class="lead-email">${escapeHtml(lead.email)}</div>
       </td>
       <td>${escapeHtml(lead.company || "—")}</td>
-      <td>${statusBadge(lead.status)}${lead.sentAt ? `<div class="hint">Follow-ups: ${(lead.followUps || []).length}/3</div>` : ""}</td>
-      <td>
-        <div class="row-actions">
-          ${lead.sentAt && (lead.followUps || []).length < 3 ? `<button class="icon-btn" data-action="followup" data-id="${lead.id}" title="Draft next follow-up (review before sending)">↻</button>` : ""}
-          <button class="icon-btn" data-action="preview" data-id="${lead.id}" title="Preview email">👁</button>
-          <button class="icon-btn" data-action="remove" data-id="${lead.id}" title="Remove lead">✕</button>
-        </div>
-      </td>`;
+      <td>${statusBadge(lead.status)}${lead.sentAt ? `<div class="hint">Follow-ups: ${(lead.followUps || []).length}/3${lead.followUpsStopped ? " · Stopped" : (lead.followUps || []).length === 3 ? " · Complete" : ""}</div>` : ""}</td>
+      <td><button class="btn btn-tiny btn-secondary" data-action="preview" data-id="${lead.id}" title="Preview email history">History</button></td>`;
     tbody.appendChild(tr);
+
+    // Put actions on their own full-width row: a narrow popup must not hide them
+    // to the right of a long email address or company name.
+    const actions = document.createElement("tr");
+    actions.className = "lead-actions-row";
+    const count = (lead.followUps || []).length;
+    const canFollowUp = !!lead.sentAt && !lead.followUpsStopped && count < 3;
+    const reason = lead.followUpsStopped ? "Follow-ups stopped" : count >= 3 ? "All 3 follow-ups sent" : !lead.sentAt ? "Send the initial email first" : "Review in Zoho before sending";
+    actions.innerHTML = `<td colspan="4">
+      <div class="row-actions">
+        <button class="btn btn-tiny btn-secondary" data-action="followup" data-id="${lead.id}" ${canFollowUp ? "" : "disabled"} title="${reason}">${count >= 3 ? "Follow-ups complete" : lead.followUpsStopped ? "Follow-ups stopped" : `Follow-up ${count + 1}/3`}</button>
+        ${canFollowUp ? `<button class="btn btn-tiny btn-secondary" data-action="stop-followups" data-id="${lead.id}" title="Stop after a reply or opt-out">Stop follow-ups</button>` : ""}
+        <button class="btn btn-tiny btn-danger" data-action="remove" data-id="${lead.id}" title="Remove this person from future sends">Remove lead</button>
+      </div>
+      <div class="hint">${reason}</div>
+    </td>`;
+    tbody.appendChild(actions);
   }
 }
 
@@ -459,9 +471,15 @@ function initLeadsTableEvents() {
       await saveLeads(leads.filter((l) => l.id !== id));
       await renderLeadsTable();
       await renderDashboard();
+      toast("Person removed. Future emails are cancelled; sent emails and logs are unchanged.", "success");
+    } else if (btn.dataset.action === "stop-followups") {
+      if (!confirm("Stop all remaining follow-ups for this person? Use this when they reply or opt out.")) return;
+      await updateLead(id, { followUpsStopped: true });
+      await renderLeadsTable();
+      toast("Follow-ups stopped for this person.", "success");
     } else if (btn.dataset.action === "followup") {
       const lead = (await getLeads()).find((l) => l.id === id);
-      if (!lead?.sentAt || (lead.followUps || []).length >= 3) return;
+      if (!lead?.sentAt || lead.followUpsStopped || (lead.followUps || []).length >= 3) return;
       if (!confirm("Draft the next follow-up? Confirm this person has not replied or opted out. You must approve the email in Zoho before it sends.")) return;
       const settings = await getSettings();
       if (!settings.groqApiKey) return toast("Add your Groq API key in Settings first.", "error");
@@ -476,12 +494,22 @@ function initLeadsTableEvents() {
       const lead = leadsCache.find((l) => l.id === id);
       if (!lead) return;
       const content = $("#previewContent");
-      if (lead.subject || lead.body) {
-        content.innerHTML = `<div class="pv-subject">${escapeHtml(lead.subject || "(no subject yet)")}</div><div>${escapeHtml(
-          lead.body || "(no draft generated yet)"
-        ).replace(/\n/g, "<br>")}</div>`;
-      } else {
-        content.innerHTML = `<div class="hint">No AI draft generated yet for this lead. Start the campaign to generate it.</div>`;
+      const emails = [
+        { label: lead.sentAt ? "Initial email" : "Initial draft", ...lead },
+        ...(lead.followUps || []).map((email, i) => ({ ...email, label: `Follow-up ${i + 1}/3` }))
+      ];
+      content.innerHTML = emails.map((email) => `
+        <section class="email-history-entry">
+          <h4>${escapeHtml(email.label)}</h4>
+          ${email.sentAt ? `<div class="hint">Sent ${escapeHtml(new Date(email.sentAt).toLocaleString())}</div>` : ""}
+          <div class="pv-subject">${escapeHtml(email.subject || "(no subject yet)")}</div>
+          <div>${escapeHtml(email.body || "No draft generated yet. Start a campaign to generate one.").replace(/\n/g, "<br>")}</div>
+        </section>`).join("");
+      if (lead.followUpError) {
+        const error = document.createElement("p");
+        error.className = "hint";
+        error.textContent = `Last follow-up failed: ${lead.followUpError}. No follow-up was counted; you can retry.`;
+        content.appendChild(error);
       }
       $("#previewModal").classList.remove("hidden");
     }
@@ -629,7 +657,7 @@ function initLogsEvents() {
       toast("No logs to export yet.", "error");
       return;
     }
-    const csv = toCSV(["timestamp", "name", "email", "company", "subject", "status", "error"], logs);
+    const csv = toCSV(["timestamp", "name", "email", "company", "subject", "followUpNumber", "status", "error"], logs);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

@@ -80,6 +80,33 @@ twice.
 
 ---
 
+## 👤 Remove people and send follow-ups
+
+In the **Leads** tab:
+
+- Click **Remove lead** below a person to remove them from the queue and cancel future
+  sends, including a draft awaiting approval. Already-sent emails cannot be
+  recalled. Existing campaign logs are kept. **Clear** removes the entire queue.
+- After the initial email has been sent, click **Follow-up 1/3**, then **2/3**
+  and **3/3** as needed. The AI uses the original email and previous follow-ups as
+  context. Each follow-up opens in Zoho Mail for **Approve & Send**, even if your
+  normal campaign uses Full-Auto. A failed or skipped attempt does not count
+  toward the three-send limit.
+- Click **Stop follow-ups** when someone replies or opts out. This keeps the
+  person and their email history but blocks further follow-ups and cancels a
+  follow-up awaiting approval.
+- Click **History** to view the original email and all sent follow-ups,
+  including timestamps. Exported logs include `followUpNumber` (`0` for the
+  initial email).
+
+Follow-ups are **manual, not scheduled**. The extension does not detect replies,
+opt-outs, or bounces automatically. Check your inbox before each follow-up; no
+additional emails are sent just because the initial email was sent. Removing a
+person is not a permanent suppression list: importing their address again creates
+a new lead, so do not re-import recipients who opted out.
+
+---
+
 ## ✍️ Customize how the AI writes
 
 Open the **Compose** tab to control the voice of every email:
