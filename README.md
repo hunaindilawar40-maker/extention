@@ -26,7 +26,11 @@ and leads exported from **Apollo.io**.
 4. **Protect your account** — randomized delays between sends, a hard daily send cap,
    and a floating on-screen HUD with Pause/Resume/Stop/Skip-Delay controls so you're
    always in control.
-5. **Log everything** — every attempt (sent/failed/skipped) is recorded and exportable
+5. **Batch follow-ups with per-lead memory** — a dedicated Follow-ups tab remembers
+   exactly which follow-up (1/3, 2/3, 3/3) every lead has received, lets you select
+   the first 25 ready leads (or all of them), and sends each lead only its next
+   follow-up. Duplicate follow-ups are impossible by construction.
+6. **Log everything** — every attempt (sent/failed/skipped) is recorded and exportable
    as CSV.
 
 ---
@@ -80,7 +84,48 @@ twice.
 
 ---
 
-## 👤 Remove people and send follow-ups
+## 🔁 Follow-ups: per-lead memory and batches of 25
+
+The extension remembers, **for every lead on this device**, exactly which emails
+have already been sent. Each lead stores its initial email plus a `followUps`
+history (number, subject, body, timestamp). A follow-up is only appended to that
+history after it is actually sent — a failed or skipped attempt never consumes a
+slot, so retrying sends the same follow-up number again. Nothing can ever be
+double-sent: both the background worker and the Zoho content script re-check the
+stored history before every follow-up.
+
+### Follow-ups tab (batched sending)
+
+Open the **Follow-ups** tab to work the whole queue at once:
+
+1. The top cards summarize the queue: how many leads are **Ready**, how many
+   already received **F1** / **F2**, how many are **Complete** (3/3), and how
+   many are **Stopped**.
+2. The **Memory** column shows stage pips per lead — `Initial`, `F1`, `F2`,
+   `F3` — filled green once that email was sent (hover a pip for its timestamp).
+   The **Next** column shows the exact follow-up that lead would receive next.
+3. Set the **Batch size** (default **25**) and click **Select first 25** to check
+   the first 25 ready leads in queue order. **Select all ready** checks every
+   eligible lead, **Clear** resets the selection, and the header checkbox toggles
+   everything currently visible. Search and the stage filter narrow the list;
+   "Select first N" always respects the current view.
+4. Click **Start follow-up batch (N selected)**. The extension re-reads the stored
+   memory at send time and tags every selected lead with its **own correct next
+   follow-up number** — a batch can mix follow-up 1, 2 and 3 recipients safely.
+   The confirmation dialog shows the breakdown (e.g. `18× follow-up 1, 7×
+   follow-up 2`).
+5. The batch runs inside your Zoho Mail tab through the normal campaign HUD, one
+   lead at a time, with your randomized cooldown between emails. **Every
+   follow-up opens for Approve & Send**, even when Full-Auto is your default for
+   initial emails. As each one is sent, its memory pip updates live — reopen the
+   tab anytime to see exactly who got what.
+
+Typical workflow: select the first 25 leads → send follow-up 1 to all of them →
+come back later; those 25 now show `F1` filled and **Next: Follow-up 2/3**, so
+selecting them again sends follow-up 2 to exactly the people who received
+follow-up 1 — never a duplicate.
+
+### Leads tab (one person at a time)
 
 In the **Leads** tab:
 
@@ -88,13 +133,13 @@ In the **Leads** tab:
   sends, including a draft awaiting approval. Already-sent emails cannot be
   recalled. Existing campaign logs are kept. **Clear** removes the entire queue.
 - After the initial email has been sent, click **Follow-up 1/3**, then **2/3**
-  and **3/3** as needed. The AI uses the original email and previous follow-ups as
-  context. Each follow-up opens in Zoho Mail for **Approve & Send**, even if your
-  normal campaign uses Full-Auto. A failed or skipped attempt does not count
-  toward the three-send limit.
+  and **3/3** as needed for an individual person. The AI uses the original email
+  and previous follow-ups as context. Each follow-up opens in Zoho Mail for
+  **Approve & Send**, even if your normal campaign uses Full-Auto.
 - Click **Stop follow-ups** when someone replies or opts out. This keeps the
-  person and their email history but blocks further follow-ups and cancels a
-  follow-up awaiting approval.
+  person and their email history but blocks further follow-ups (they disappear
+  from the selectable list in the Follow-ups tab) and cancels a follow-up
+  awaiting approval.
 - Click **History** to view the original email and all sent follow-ups,
   including timestamps. Exported logs include `followUpNumber` (`0` for the
   initial email).

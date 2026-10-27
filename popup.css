@@ -683,6 +683,132 @@ input[type="range"] {
 .email-history-entry + .email-history-entry { border-top: 1px solid var(--border, #ddd); margin-top: 16px; padding-top: 12px; }
 .email-history-entry h4 { margin: 0 0 6px; }
 
+/* ---------------------------------------------------------------------
+   Follow-ups tab (batched, memory-driven follow-up sends)
+   --------------------------------------------------------------------- */
+.stat-grid-fu {
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.stat-grid-fu .stat-card {
+  padding: 8px 2px;
+}
+
+.stat-grid-fu .stat-value {
+  font-size: 15px;
+}
+
+.fu-batch-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.fu-batch-size {
+  display: flex;
+  flex-direction: column;
+  width: 88px;
+  flex-shrink: 0;
+}
+
+.fu-batch-size input {
+  margin-bottom: 0;
+}
+
+.fu-batch-row .btn {
+  white-space: nowrap;
+}
+
+#fuTable {
+  table-layout: fixed;
+}
+
+#fuTable td {
+  overflow-wrap: anywhere;
+}
+
+#fuTable th:nth-child(1) {
+  width: 32px;
+}
+
+#fuTable th:nth-child(2) {
+  width: 36%;
+}
+
+#fuTable th:nth-child(3) {
+  width: 27%;
+}
+
+.fu-check-col {
+  text-align: center;
+}
+
+.fu-check-col input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.fu-row-locked {
+  opacity: 0.7;
+}
+
+.fu-next-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+
+.fu-next-ready {
+  background: rgba(124, 92, 255, 0.22);
+  color: #b7a6ff;
+}
+
+.fu-next-done {
+  background: rgba(46, 204, 113, 0.18);
+  color: var(--green);
+}
+
+.fu-next-stopped {
+  background: rgba(255, 90, 90, 0.18);
+  color: var(--red);
+}
+
+.fu-pips {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.fu-pip {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+
+.fu-pip-done {
+  background: rgba(46, 204, 113, 0.2);
+  color: var(--green);
+  border-color: rgba(46, 204, 113, 0.4);
+}
+
+.fu-stopped-note {
+  margin: 4px 0 0;
+  color: var(--red);
+}
+
 /* Action rows stay visible without horizontal scrolling, even for long leads. */
 #leadsTable { table-layout: fixed; }
 #leadsTable td { overflow-wrap: anywhere; }

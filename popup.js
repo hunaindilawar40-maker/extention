@@ -526,6 +526,263 @@ function initLeadsTableEvents() {
 }
 
 // ---------------------------------------------------------------------
+// Follow-ups tab: batched follow-up sends driven by per-lead memory
+// ---------------------------------------------------------------------
+let fuCache = [];
+const fuSelectedIds = new Set();
+
+/** Number of follow-ups already recorded as sent for a lead (the memory). */
+function fuCount(lead) {
+  return (lead.followUps || []).length;
+}
+
+/** A lead can receive another follow-up only after the initial email, unless stopped, and under the 3-follow-up cap. */
+function fuIsEligible(lead) {
+  return !!lead.sentAt && !lead.followUpsStopped && fuCount(lead) < 3;
+}
+
+/** The follow-up number that would be sent next for this lead (1-3). */
+function fuNextNumber(lead) {
+  return fuCount(lead) + 1;
+}
+
+function fuStageFilter(lead, filter) {
+  switch (filter) {
+    case "f1":
+      return fuIsEligible(lead) && fuCount(lead) === 0;
+    case "f2":
+      return fuIsEligible(lead) && fuCount(lead) === 1;
+    case "f3":
+      return fuIsEligible(lead) && fuCount(lead) === 2;
+    case "complete":
+      return fuCount(lead) >= 3;
+    case "stopped":
+      return !!lead.followUpsStopped;
+    case "unsent":
+      return !lead.sentAt;
+    default:
+      return true;
+  }
+}
+
+/** Visual memory of every stage: Initial, F1, F2, F3 — filled once sent, with the sent time in the tooltip. */
+function fuMemoryPips(lead) {
+  const stages = [
+    { label: "Initial", done: !!lead.sentAt, time: lead.sentAt },
+    ...[1, 2, 3].map((n) => {
+      const fu = (lead.followUps || []).find((f) => f.number === n) || (lead.followUps || [])[n - 1];
+      return { label: `F${n}`, done: !!fu, time: fu?.sentAt };
+    })
+  ];
+  const pips = stages
+    .map((s) => {
+      const when = s.time ? ` · sent ${new Date(s.time).toLocaleString()}` : " · not sent yet";
+      return `<span class="fu-pip ${s.done ? "fu-pip-done" : ""}" title="${escapeHtml(s.label + when)}">${s.label}</span>`;
+    })
+    .join("");
+  return `<div class="fu-pips">${pips}</div>${
+    lead.followUpsStopped ? `<div class="hint fu-stopped-note">Follow-ups stopped</div>` : ""
+  }`;
+}
+
+async function renderFollowupsTable() {
+  fuCache = await getLeads();
+  // Drop selections for leads that no longer exist.
+  for (const id of fuSelectedIds) {
+    if (!fuCache.some((l) => l.id === id)) fuSelectedIds.delete(id);
+  }
+
+  const sentLeads = fuCache.filter((l) => l.sentAt);
+  $("#fuStatReady").textContent = sentLeads.filter(fuIsEligible).length;
+  $("#fuStatF1").textContent = sentLeads.filter((l) => fuCount(l) >= 1).length;
+  $("#fuStatF2").textContent = sentLeads.filter((l) => fuCount(l) >= 2).length;
+  $("#fuStatComplete").textContent = sentLeads.filter((l) => fuCount(l) >= 3).length;
+  $("#fuStatStopped").textContent = sentLeads.filter((l) => l.followUpsStopped).length;
+
+  const q = $("#fuSearch").value.trim().toLowerCase();
+  const filter = $("#fuFilter").value;
+  const tbody = $("#fuTbody");
+  tbody.innerHTML = "";
+
+  const filtered = fuCache.filter((l) => {
+    const matchesQ =
+      !q || [l.fullName, l.email, l.company, l.title].some((v) => (v || "").toLowerCase().includes(q));
+    return matchesQ && fuStageFilter(l, filter);
+  });
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="4">No leads match this view. Import leads and send the initial campaign first.</td></tr>`;
+  } else {
+    for (const lead of filtered) {
+      const eligible = fuIsEligible(lead);
+      const count = fuCount(lead);
+      const nextLabel = !lead.sentAt
+        ? "Initial not sent"
+        : lead.followUpsStopped
+        ? "Stopped"
+        : count >= 3
+        ? "Complete 3/3"
+        : `Follow-up ${count + 1}/3`;
+      const badgeClass = eligible ? "ready" : lead.followUpsStopped ? "stopped" : "done";
+      const tr = document.createElement("tr");
+      if (!eligible) tr.classList.add("fu-row-locked");
+      tr.innerHTML = `
+        <td class="fu-check-col"><input type="checkbox" class="fu-check" data-id="${lead.id}" ${
+        fuSelectedIds.has(lead.id) ? "checked" : ""
+      } ${eligible ? "" : "disabled"} /></td>
+        <td>
+          <div class="lead-name">${escapeHtml(lead.fullName || lead.email)}</div>
+          <div class="lead-email">${escapeHtml(lead.email)}</div>
+          <div class="lead-email">${escapeHtml(lead.company || "")}</div>
+        </td>
+        <td><span class="fu-next-badge fu-next-${badgeClass}">${nextLabel}</span></td>
+        <td>${fuMemoryPips(lead)}</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  updateFuSelectAll();
+  updateFuSendButton();
+}
+
+function updateFuSelectAll() {
+  const selectAll = $("#fuSelectAll");
+  const visibleEligible = $$("#fuTbody .fu-check:not(:disabled)");
+  const checked = $$("#fuTbody .fu-check:checked");
+  selectAll.checked = visibleEligible.length > 0 && visibleEligible.length === checked.length;
+  selectAll.indeterminate = checked.length > 0 && !selectAll.checked;
+}
+
+function updateFuSendButton() {
+  const btn = $("#btnFuSend");
+  const n = fuSelectedIds.size;
+  btn.textContent = `Start follow-up batch (${n} selected)`;
+  btn.disabled = n === 0;
+}
+
+function initFollowupsEvents() {
+  $("#fuSearch").addEventListener("input", renderFollowupsTable);
+  $("#fuFilter").addEventListener("change", renderFollowupsTable);
+
+  $("#fuBatchSize").addEventListener("input", (e) => {
+    const n = Math.max(1, Number(e.target.value) || 25);
+    $("#btnFuSelectFirst").textContent = `Select first ${n}`;
+  });
+
+  // Header checkbox: toggle every visible, selectable lead.
+  $("#fuSelectAll").addEventListener("change", (e) => {
+    $$("#fuTbody .fu-check:not(:disabled)").forEach((cb) => {
+      cb.checked = e.target.checked;
+      if (e.target.checked) fuSelectedIds.add(cb.dataset.id);
+      else fuSelectedIds.delete(cb.dataset.id);
+    });
+    updateFuSendButton();
+  });
+
+  // Per-lead checkboxes (event delegation).
+  $("#fuTbody").addEventListener("change", (e) => {
+    const cb = e.target.closest(".fu-check");
+    if (!cb) return;
+    if (cb.checked) fuSelectedIds.add(cb.dataset.id);
+    else fuSelectedIds.delete(cb.dataset.id);
+    updateFuSelectAll();
+    updateFuSendButton();
+  });
+
+  // Select the first N ready leads in queue order (respects the active search/stage filter).
+  $("#btnFuSelectFirst").addEventListener("click", () => {
+    const n = Math.max(1, Number($("#fuBatchSize").value) || 25);
+    const visibleEligible = $$("#fuTbody .fu-check:not(:disabled)");
+    fuSelectedIds.clear();
+    visibleEligible.slice(0, n).forEach((cb) => {
+      cb.checked = true;
+      fuSelectedIds.add(cb.dataset.id);
+    });
+    visibleEligible.slice(n).forEach((cb) => {
+      cb.checked = false;
+    });
+    updateFuSelectAll();
+    updateFuSendButton();
+  });
+
+  $("#btnFuSelectAll").addEventListener("click", async () => {
+    const leads = await getLeads();
+    leads.filter(fuIsEligible).forEach((l) => fuSelectedIds.add(l.id));
+    await renderFollowupsTable();
+  });
+
+  $("#btnFuClear").addEventListener("click", async () => {
+    fuSelectedIds.clear();
+    await renderFollowupsTable();
+  });
+
+  $("#btnFuSend").addEventListener("click", startFollowUpBatch);
+}
+
+async function startFollowUpBatch() {
+  if (!fuSelectedIds.size) return;
+
+  const settings = await getSettings();
+  if (!settings.groqApiKey) {
+    toast("Add your Groq API key in Settings first.", "error");
+    return;
+  }
+
+  // Re-read storage at send time so each lead's follow-up memory is fresh;
+  // every lead is tagged with its own correct next follow-up number.
+  const leads = await getLeads();
+  const batch = leads
+    .filter((l) => fuSelectedIds.has(l.id) && fuIsEligible(l))
+    .map((l) => ({ ...l, followUpNumber: fuNextNumber(l) }));
+
+  if (!batch.length) {
+    toast("None of the selected leads are ready for a follow-up right now.", "error");
+    return;
+  }
+
+  const breakdown = [1, 2, 3]
+    .map((n) => {
+      const count = batch.filter((l) => l.followUpNumber === n).length;
+      return count ? `${count}× follow-up ${n}` : "";
+    })
+    .filter(Boolean)
+    .join(", ");
+  if (
+    !confirm(
+      `Send the next follow-up to ${batch.length} lead(s) (${breakdown})? ` +
+        "Confirm none of them have replied or opted out. Each email opens in Zoho Mail one at a time and you must approve it before sending."
+    )
+  ) {
+    return;
+  }
+
+  const conn = await checkZohoConnection();
+  if (!conn.ok) {
+    toast(conn.error, "error");
+    return;
+  }
+
+  const res = await sendBg({
+    type: "RELAY_TO_ZOHO_TAB",
+    payload: {
+      type: "START_CAMPAIGN",
+      leads: batch,
+      // Follow-ups always require explicit approval in Zoho, even for Full-Auto campaigns.
+      settings: { ...settings, sendMode: "review" }
+    }
+  });
+
+  if (res.ok && res.response?.ok) {
+    toast(
+      `Follow-up batch started for ${batch.length} lead(s) — approve each email in Zoho Mail.`,
+      "success"
+    );
+  } else {
+    toast(res.response?.error || res.error || "Failed to start follow-up batch.", "error");
+  }
+}
+
+// ---------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------
 async function renderDashboard() {
@@ -682,6 +939,7 @@ function initStorageSync() {
     if (area !== "local") return;
     if (changes.aoz_leads) {
       renderLeadsTable();
+      renderFollowupsTable();
       renderDashboard();
     }
     if (changes.aoz_logs) {
@@ -702,6 +960,7 @@ async function init() {
   initCsvImport();
   initMapModal();
   initLeadsTableEvents();
+  initFollowupsEvents();
   initDashboardEvents();
   initLogsEvents();
   initStorageSync();
@@ -709,6 +968,7 @@ async function init() {
   const settings = await loadSettingsIntoForm();
   if (settings.groqApiKey) await refreshGroqModels();
   await renderLeadsTable();
+  await renderFollowupsTable();
   await renderDashboard();
   await renderLogsTable();
   await checkZohoConnection();
