@@ -11,7 +11,7 @@
       <img src="icons/icon48.png" alt="" class="app-logo" />
       <div class="app-heading">
         <div class="app-title">AI Outreach</div>
-        <div class="app-subtitle">for Zoho Mail · v1.1.3</div>
+        <div class="app-subtitle">for Zoho Mail · v1.2.0</div>
       </div>
       <span id="connStatus" class="conn-badge conn-unknown" title="Zoho Mail tab connection">●</span>
     </header>
@@ -19,6 +19,7 @@
     <nav class="tabs" id="tabs">
       <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
       <button class="tab-btn" data-tab="leads">Leads</button>
+      <button class="tab-btn" data-tab="followups">Follow-ups</button>
       <button class="tab-btn" data-tab="compose">Compose</button>
       <button class="tab-btn" data-tab="settings">Settings</button>
       <button class="tab-btn" data-tab="logs">Logs</button>
@@ -126,6 +127,82 @@
             </tbody>
           </table>
         </div>
+      </section>
+
+      <!-- FOLLOW-UPS (batched, memory-driven) -->
+      <section id="tab-followups" class="tab-pane">
+        <div class="stat-grid stat-grid-fu">
+          <div class="stat-card">
+            <div class="stat-value" id="fuStatReady">0</div>
+            <div class="stat-label">Ready</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="fuStatF1">0</div>
+            <div class="stat-label">F1 sent</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="fuStatF2">0</div>
+            <div class="stat-label">F2 sent</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="fuStatComplete">0</div>
+            <div class="stat-label">Complete</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" id="fuStatStopped">0</div>
+            <div class="stat-label">Stopped</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Batch follow-ups</div>
+          <div class="hint">
+            The extension remembers every follow-up per lead. Each selected lead is sent only its
+            <strong>next</strong> follow-up based on that memory — a follow-up is never sent twice.
+            Follow-ups open in Zoho Mail one at a time and always need your approval.
+          </div>
+          <div class="fu-batch-row">
+            <div class="fu-batch-size">
+              <label class="field-label-inline" for="fuBatchSize">Batch size</label>
+              <input type="number" id="fuBatchSize" min="1" max="500" value="25" />
+            </div>
+            <button class="btn btn-tiny btn-secondary" id="btnFuSelectFirst">Select first 25</button>
+            <button class="btn btn-tiny btn-secondary" id="btnFuSelectAll">Select all ready</button>
+            <button class="btn btn-tiny btn-secondary" id="btnFuClear">Clear</button>
+          </div>
+          <button class="btn btn-primary btn-block" id="btnFuSend" disabled>Start follow-up batch (0 selected)</button>
+          <div class="hint" id="fuSendHint">Only leads whose initial email was sent are selectable.</div>
+        </div>
+
+        <div class="leads-toolbar">
+          <input type="search" id="fuSearch" placeholder="Search name, email, company…" />
+          <select id="fuFilter">
+            <option value="all">All stages</option>
+            <option value="f1">Ready: follow-up 1</option>
+            <option value="f2">Ready: follow-up 2</option>
+            <option value="f3">Ready: follow-up 3</option>
+            <option value="complete">Complete (3/3)</option>
+            <option value="stopped">Stopped</option>
+            <option value="unsent">Initial not sent</option>
+          </select>
+        </div>
+
+        <div class="table-wrap">
+          <table class="leads-table fu-table" id="fuTable">
+            <thead>
+              <tr>
+                <th class="fu-check-col"><input type="checkbox" id="fuSelectAll" title="Select all visible leads" /></th>
+                <th>Lead</th>
+                <th>Next</th>
+                <th>Memory</th>
+              </tr>
+            </thead>
+            <tbody id="fuTbody">
+              <tr class="empty-row"><td colspan="4">No leads yet — import a CSV and send the initial campaign first.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="footnote">Memory is stored locally in each lead's history. A failed or skipped follow-up is not counted, so retrying sends the same follow-up number again. Reopen this tab any time to see exactly who has received which follow-up.</p>
       </section>
 
       <!-- COMPOSE / AI SETTINGS -->

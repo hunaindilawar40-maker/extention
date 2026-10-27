@@ -465,7 +465,11 @@
     const initial = (lead.firstName || lead.fullName || lead.email || "?").trim().charAt(0).toUpperCase();
     elRefs.avatar.textContent = initial || "?";
     elRefs.leadName.textContent = lead.fullName || lead.email;
-    elRefs.leadSub.textContent = [lead.company, lead.email].filter(Boolean).join(" · ");
+    const subParts = [lead.company, lead.email].filter(Boolean);
+    // Make follow-up batches legible in the HUD: each lead card shows which
+    // follow-up of the 3 is currently being drafted/reviewed.
+    if (lead.followUpNumber) subParts.push(`Follow-up ${lead.followUpNumber}/3`);
+    elRefs.leadSub.textContent = subParts.join(" · ");
   }
 
   function setReviewVisible(visible) {
