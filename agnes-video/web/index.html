@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Agnes Studio — text to video</title>
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="grain"></div>
+
+<header class="top">
+  <div class="brand">
+    <span class="dot"></span>
+    <h1>Agnes Studio</h1>
+    <span class="tag">text &rarr; video</span>
+  </div>
+  <div class="top-right">
+    <span id="keyPill" class="pill pill-off">no API key</span>
+    <button id="keyBtn" class="ghost">API key</button>
+  </div>
+</header>
+
+<main class="grid">
+  <!-- ------------------------------------------------------------ composer -->
+  <section class="card composer">
+    <label class="label" for="prompt">Prompt</label>
+    <textarea id="prompt" rows="6" placeholder="A silver sports car drifts through a rain-soaked neon street at night, reflections on wet asphalt, slow cinematic tracking shot, shallow depth of field"></textarea>
+    <div class="chips" id="chips"></div>
+
+    <div class="row two">
+      <div class="field">
+        <label class="label" for="model">Model</label>
+        <select id="model">
+          <option value="agnes-video-2.5-flash">agnes-video-2.5-flash · fast</option>
+          <option value="agnes-video-2.5">agnes-video-2.5 · quality</option>
+          <option value="agnes-video-v2.0">agnes-video-v2.0 · legacy</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="label" for="aspect">Aspect ratio</label>
+        <select id="aspect">
+          <option>16:9</option><option>9:16</option><option>1:1</option>
+          <option>4:3</option><option>3:4</option><option>21:9</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field grow">
+        <label class="label" for="seconds">Duration <span id="secondsOut" class="muted">5s</span></label>
+        <input id="seconds" type="range" min="4" max="12" step="1" value="5" />
+      </div>
+      <div class="field">
+        <label class="label" for="size">Resolution</label>
+        <select id="size">
+          <option>720P</option><option>1080P</option><option>1K</option><option>2K</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label class="label" for="mode">Mode</label>
+        <select id="mode">
+          <option value="text">text</option>
+          <option value="keyframe">keyframe</option>
+          <option value="reference">reference</option>
+        </select>
+      </div>
+      <div class="field grow">
+        <label class="label" for="seed">Seed <span class="muted">optional</span></label>
+        <input id="seed" type="number" placeholder="random" min="0" step="1" />
+      </div>
+    </div>
+
+    <div id="keyframeFields" class="row two hidden">
+      <div class="field"><label class="label" for="firstFrame">First frame URL</label>
+        <input id="firstFrame" type="url" placeholder="https://…/a.jpg" /></div>
+      <div class="field"><label class="label" for="lastFrame">Last frame URL</label>
+        <input id="lastFrame" type="url" placeholder="https://…/b.jpg" /></div>
+    </div>
+    <div id="referenceFields" class="hidden">
+      <label class="label">Reference media <span class="muted">one URL per line</span></label>
+      <textarea id="refs" rows="3" placeholder="https://…/image.jpg&#10;https://…/voice.mp3"></textarea>
+      <p class="hint">Mention them in the prompt as &lt;Picture 1&gt;, &lt;Audio 1&gt;, &lt;Video 1&gt;.</p>
+    </div>
+
+    <div class="actions">
+      <button id="go" class="primary">
+        <span class="spinner hidden" id="goSpin"></span>
+        <span id="goLabel">Generate video</span>
+      </button>
+      <button id="stop" class="ghost hidden">Stop polling</button>
+      <span id="cost" class="muted tiny"></span>
+    </div>
+    <div id="error" class="error hidden"></div>
+  </section>
+
+  <!-- ------------------------------------------------------------- preview -->
+  <section class="card preview">
+    <div class="stage" id="stage">
+      <div class="empty" id="empty">
+        <svg viewBox="0 0 24 24" width="42" height="42" aria-hidden="true">
+          <path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Zm7 4.5v5l4.5-2.5-4.5-2.5Z"
+                fill="currentColor" opacity=".9"/>
+        </svg>
+        <p>Your clip shows up here.<br /><span class="muted">720P · 5s takes about a minute.</span></p>
+      </div>
+      <video id="video" class="hidden" controls playsinline loop></video>
+      <div class="progress hidden" id="progress">
+        <div class="bar"><div class="fill" id="barFill"></div></div>
+        <div class="progress-meta">
+          <span id="statusText">queued</span>
+          <span id="elapsed" class="muted">0s</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="meta hidden" id="meta">
+      <div class="metaline"><span class="muted">video_id</span> <code id="vidId">—</code></div>
+      <div class="metaline"><span class="muted">url</span> <code id="vidUrl" class="trunc">—</code></div>
+      <div class="actions">
+        <a id="dl" class="button" href="#" download>Download mp4</a>
+        <button id="copy" class="ghost">Copy link</button>
+        <button id="again" class="ghost">Regenerate</button>
+      </div>
+    </div>
+
+    <div class="history">
+      <div class="history-head"><span class="label">This session</span></div>
+      <ul id="history" class="history-list">
+        <li class="muted empty-row">Nothing yet.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<!-- key dialog -->
+<dialog id="keyDialog">
+  <form method="dialog" id="keyForm">
+    <h2>Agnes API key</h2>
+    <p class="muted">Used only by the local server process — it is kept in memory, never written to disk and never sent anywhere except <code>apihub.agnes-ai.com</code>.</p>
+    <input id="keyInput" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false" />
+    <p class="hint" id="keyHint"></p>
+    <div class="actions">
+      <button value="save" class="primary" id="keySave">Save key</button>
+      <button value="cancel" class="ghost" formnovalidate>Cancel</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/app.js"></script>
+</body>
+</html>

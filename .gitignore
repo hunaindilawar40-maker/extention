@@ -1,1 +1,6 @@
 node_modules/
+
+# agnes-video: secrets and generated media
+agnes-video/.env
+agnes-video/output/
+agnes-video/__pycache__/

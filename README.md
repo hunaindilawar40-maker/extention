@@ -308,3 +308,12 @@ password or account access required — it drives the Zoho Mail web UI the same 
 human would. You are responsible for complying with applicable anti-spam laws (e.g.
 CAN-SPAM, GDPR, CASL) and Zoho's Terms of Service for your outreach: get consent where
 required, include a clear way to opt out, and keep sending volumes reasonable.
+
+---
+
+## 🎬 Bonus: Agnes AI text → video (`agnes-video/`)
+
+A self-contained, dependency-free toolkit for turning prompts into short AI videos with
+the **Agnes** API — either as a local web page (`python3 agnes_server.py`) or a CLI
+(`python3 agnes_video.py --prompt "..."`). Separate from the extension; see
+[`agnes-video/README.md`](agnes-video/README.md).
