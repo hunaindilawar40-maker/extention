@@ -17,6 +17,7 @@
   </div>
   <div class="top-right">
     <span id="keyPill" class="pill pill-off">no API key</span>
+    <button id="popOut" class="ghost hidden" title="Open the full studio in a tab">Open in tab</button>
     <button id="keyBtn" class="ghost">API key</button>
   </div>
 </header>
@@ -48,6 +49,21 @@
 
     <div class="row">
       <div class="field grow">
+        <label class="label" for="transport">Network</label>
+        <select id="transport">
+          <option value="server">Local server (default)</option>
+          <option value="direct">Browser direct — this tab calls the API</option>
+        </select>
+      </div>
+      <div class="field grow">
+        <label class="label" for="seed">Seed <span class="muted">optional</span></label>
+        <input id="seed" type="number" placeholder="random" min="0" step="1" />
+      </div>
+    </div>
+    <p class="hint" id="transportHint">Calls go to the local Python server on this machine.</p>
+
+    <div class="row">
+      <div class="field grow">
         <label class="label" for="seconds">Duration <span id="secondsOut" class="muted">5s</span></label>
         <input id="seconds" type="range" min="4" max="12" step="1" value="5" />
       </div>
@@ -60,17 +76,13 @@
     </div>
 
     <div class="row">
-      <div class="field">
+      <div class="field grow">
         <label class="label" for="mode">Mode</label>
         <select id="mode">
-          <option value="text">text</option>
-          <option value="keyframe">keyframe</option>
-          <option value="reference">reference</option>
+          <option value="text">text — prompt only</option>
+          <option value="keyframe">keyframe — first/last frame</option>
+          <option value="reference">reference — image/audio/video</option>
         </select>
-      </div>
-      <div class="field grow">
-        <label class="label" for="seed">Seed <span class="muted">optional</span></label>
-        <input id="seed" type="number" placeholder="random" min="0" step="1" />
       </div>
     </div>
 

@@ -8,6 +8,7 @@ Two ways to use it:
 |---|---|---|
 | **Web UI** | `agnes_server.py` → a local page with prompt box, presets, live progress and a download button | you want to play with prompts |
 | **CLI** | `agnes_video.py` → one command, saves an `.mp4` | scripting / batch jobs |
+| **Chrome extension** | load this folder unpacked → the same studio in a popup, no Python needed | the machine running the page can't reach the API (firewalls, sandboxes, previews) |
 
 Both share `agnes_api.py` (pure Python standard library — nothing to `pip install`).
 
@@ -81,6 +82,31 @@ python3 agnes_video.py -p "..." --dry-run          # show the JSON body, spend n
 
 Exit codes: `0` ok, `1` API/generation failure, `2` bad arguments.
 
+### Network mode (important if the page can't reach the API)
+
+The studio can call Agnes two ways — pick with the **Network** dropdown:
+
+| mode | who makes the HTTP call | when |
+|---|---|---|
+| **Local server** (default) | the Python process on this machine | running it on your own laptop |
+| **Browser direct** | the tab itself, straight to `apihub.agnes-ai.com` | the page is hosted somewhere locked down (Arena preview, a sandbox, a remote box) but *your* browser has normal internet |
+
+Saving a key keeps it for both modes (server memory + this tab's `sessionStorage`), so you
+paste it once and can flip the dropdown afterwards. An unverifiable key is now accepted
+with a warning — only a real `401`/`403` is refused.
+
+### Chrome extension (no Python)
+
+An `manifest.json` sits at the root of this folder, so the whole folder *is* the extension:
+
+1. `chrome://extensions` → **Developer mode** on → **Load unpacked** → pick `agnes-video/`.
+2. Click the icon → paste your key → prompt → **Generate**.
+3. The popup is tight; **Open in tab** gives you the full layout.
+
+Extension pages are exempt from browser CORS, so this is the most reliable path when a
+normal web page can't talk to Agnes. Only `https://apihub.agnes-ai.com/*` is requested.
+The key lives in that extension's `sessionStorage`.
+
 ## 3. What the API expects
 
 ```
@@ -117,6 +143,8 @@ agnes-video/
 │   ├── style.css
 │   └── app.js
 ├── test_agnes_api.py   # 17 offline tests (payload validation + response parsing)
+├── manifest.json       # load this folder unpacked → Chrome/Edge/Brave extension
+├── icons/
 └── .env.example
 ```
 
@@ -133,7 +161,8 @@ cd agnes-video && python3 -m unittest -v
 | `HTTP 401` | key wrong / revoked — re-paste it |
 | `HTTP 400 ... size` | flash only does 720P; use `agnes-video-2.5` for 1080P/2K |
 | `HTTP 429` | ~16 req/min limit — wait a few seconds |
-| `Could not reach apihub.agnes-ai.com` | sandbox/firewall blocks outbound HTTPS; run this on your own machine |
+| `Could not reach apihub.agnes-ai.com` / `TLS/SSL connection has been closed` | the *machine serving the page* blocks outbound HTTPS (Arena preview, sandbox, corporate proxy). Switch **Network → Browser direct**, or use the extension. Your key is fine — this is not a key error. |
+| Key dialog says "rejected" | only a real `401`/`403` from Agnes does that; anything else is saved with a warning |
 | Task completes but no URL | run with `--json` (CLI) to dump the raw response and see the actual field names |
 | Video plays on the API URL but download fails | the mp4 is served from a CDN that may need the Bearer token; the local `/api/file` proxy forwards it — use the Download button rather than right-click-save |
 

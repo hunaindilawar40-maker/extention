@@ -169,10 +169,25 @@ class Handler(BaseHTTPRequestHandler):
         try:
             models = api.list_models(key)
         except api.AgnesError as exc:
-            self._send_json({"error": f"That key was rejected. {exc}"}, 400)
+            # A 401/403 means the key really is bad — refuse it.
+            if exc.status in (401, 403):
+                self._send_json({"error": f"That key was rejected. {exc}"}, 400)
+                return
+            # Anything else (blocked network, timeout, 5xx) says nothing about
+            # the key itself, so keep it and warn instead of refusing.
+            set_key(key)
+            self._send_json({
+                "ok": True,
+                "key_configured": True,
+                "verified": False,
+                "warning": (
+                    "Key saved but could not be verified — this machine cannot reach "
+                    f"the Agnes API. {exc}"
+                ),
+            })
             return
         set_key(key)
-        self._send_json({"ok": True, "key_configured": True, "models": models})
+        self._send_json({"ok": True, "key_configured": True, "verified": True, "models": models})
 
     def _create(self, body: dict) -> None:
         key = current_key()

@@ -60,10 +60,11 @@ html, body {
   display: grid; gap: 18px;
   grid-template-columns: minmax(340px, 460px) minmax(380px, 1fr);
   padding: 8px clamp(16px, 4vw, 44px) 48px;
+  max-width: 1400px;
   align-items: start;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 780px) {
   .grid { grid-template-columns: 1fr; }
 }
 
